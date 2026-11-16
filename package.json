@@ -1,0 +1,22 @@
+{
+  "name": "ngogo",
+  "version": "0.1.0",
+  "main": "index.js",
+  "license": "MIT",
+  "private": true,
+  "scripts": {
+    "lint": "eslint src/**/*",
+    "replay": "node test/replay-all.mjs"
+  },
+  "devDependencies": {
+    "eslint": "^8.56.0",
+    "eslint-plugin-react-hooks": "^4.6.0"
+  },
+  "dependencies": {
+    "@forge/bridge": "7.3.0-next.12",
+    "@forge/react": "12.5.0-next.2",
+    "@forge/resolver": "2.0.2",
+    "react": "^18.2.0"
+  },
+  "description": "Ngogo for Jira: counts the coalition around each person and turns it into a symbiosis (Codegeist 2026)."
+}
