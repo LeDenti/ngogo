@@ -31,7 +31,9 @@ export const PoolOnRequest = () => {
 
   const askAdvance = () => {
     const input = { debtor: f.debtor, face: wholeOf(f.face), advance: wholeOf(f.advance), fee: wholeOf(f.fee), days: wholeOf(f.days), analysis: f.analysis };
-    if ([input.face, input.advance, input.fee, input.days].some((v) => v === null)) { setSaid({ bad: true, text: 'Amounts and days are whole numbers.' }); return; }
+    // The grey examples in the fields are placeholders, not values: say what is missing rather than a rule.
+    if (!String(f.debtor).trim()) { setSaid({ bad: true, text: 'Type who owes the invoice first, for example Acme.' }); return; }
+    if ([input.face, input.advance, input.fee, input.days].some((v) => v === null)) { setSaid({ bad: true, text: 'Type the invoice amount and the advance asked, as whole numbers: for example 5000 and 4500.' }); return; }
     send('advance', input);
   };
 

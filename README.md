@@ -68,8 +68,9 @@ You need to be an admin of a Jira site. Everything below works on a site with no
    - *Two days pass* (after *Start again* and one more request): with nobody stepping in, the hold ends, and Nadia is still cornered.
      The membrane buys time. It does not replace help.
 4. Open the **This project** tab for the live index of your own project, and any request, **Apps > Ngogo**, for the panel.
-5. **Pool** tab: *Fund the pool*, then in a request's panel, tab **Pool**: ask an advance without ticking
-   "I checked this invoice" (refused, with the reason), then tick it (accepted).
+5. **Pool** tab: *Fund the pool*, then in a request's panel (the apps button under the request title, then *Ngogo*),
+   tab **Pool**: type `Acme`, `5000` and `4500`, and ask without ticking "I checked this invoice" (refused, with the
+   reason), then tick it and ask again (accepted).
 6. **Rovo**: open Rovo chat, choose the agent **Ngogo**, ask *"Who is cornered in this project?"*.
 7. **MCP**: in Atlassian Administration > Apps > Sites > your site > Connected apps > Ngogo, turn on **Tools**.
    Then connect any MCP client to `https://mcp.atlassian.com/forge/07dc8b38-0eb8-4048-8405-0832d63ac7e1` and sign in.
