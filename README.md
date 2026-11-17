@@ -59,7 +59,7 @@ on the project page, and in the Jira Service Management customer portal, where a
 
 You need to be an admin of a Jira site. Everything below works on a site with no data.
 
-1. **Install** with the installation link from the submission.
+1. **Install** with the installation link given in the Codegeist submission. The page reads "ngogo, by matter-x-" and asks for three permissions: view Jira issue data, create and manage issues (the hold notice is a comment), and app storage (the pool's journal).
 2. Open any Jira project, then the **Ngogo** tab in the project navigation (it may be under *More*).
 3. Open the **Demo team** tab: a simulated team of twelve and sixty requests. Nothing is read from or written to your Jira there.
    - *One more request for Nadia*: Nadia goes from wary (7.70 to 1) to cornered (8.70 to 1); the request is held; Omar is proposed.
@@ -140,6 +140,10 @@ Rovo and MCP before it was called done.
 - The thresholds, the 48 hours and the 14 days are constants in the code, not yet an admin screen.
 - `rovo:mcp` and `jira:workflowValidator` are Preview modules. The workflow validator and the service desk queue page are declared but were not exercised end to end.
 - Membrane notices are internal comments on service desk requests, so customers are never e-mailed about a colleague's load.
+
+## Privacy
+
+Ngogo stores no personal data. See [PRIVACY.md](PRIVACY.md).
 
 ## Licence
 
