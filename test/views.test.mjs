@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { issueEncirclement, projectOrganism, personIndex } from '../src/ngogo/views.js';
 import { encirclementOf, dayOfInstant } from '../src/ngogo/encirclement.js';
 import { createJiraStore, fromSource, notFromSeen, openOn } from '../src/ngogo/store-jira.js';
-import { createMemoryStore } from './memory-store.mjs';
+import { createMemoryStore } from '../src/ngogo/store-memory.js';
 
 const NOW = Date.parse('2026-11-17T09:00:00Z');
 const TODAY = dayOfInstant(NOW);

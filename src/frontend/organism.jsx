@@ -1,18 +1,21 @@
-// Ngogo project page, "the organism": everyone with open work in this project, most cornered first.
+// Ngogo project page, "the organism".
+//   This project : everyone with open work in the project, most cornered first, from live Jira.
+//   Demo team    : a simulated team of twelve to try the index and the membrane on a site with no data.
 import React, { useEffect, useState } from 'react';
-import ForgeReconciler, { useProductContext, Heading, Text, Stack, DynamicTable, Spinner, SectionMessage } from '@forge/react';
+import ForgeReconciler, {
+  useProductContext, Heading, Text, Strong, Stack, Spinner, SectionMessage,
+  Tabs, TabList, Tab, TabPanel, Button, ButtonGroup, List, ListItem, Box,
+} from '@forge/react';
 import { invoke } from '@forge/bridge';
 import { projectOrganism } from '../ngogo/views.js';
+import { demoInitial, demoStep, demoView } from '../ngogo/demo.js';
 import { store } from './jira-bridge';
-import { StateLozenge, Caveats, ratioText, plural } from './shared';
+import { Caveats, PeopleTable, Headline, Rule } from './shared';
 
-const App = () => {
+const Live = ({ projectKey }) => {
   const [data, setData] = useState(null);
   const [engine, setEngine] = useState(null);
   const [error, setError] = useState(null);
-
-  const context = useProductContext();
-  const projectKey = context?.extension?.project?.key;
 
   useEffect(() => {
     invoke('selfTest').then(setEngine).catch(() => setEngine(null));
@@ -25,62 +28,105 @@ const App = () => {
   if (error) return <SectionMessage appearance="error"><Text>Ngogo could not read this project: {error}</Text></SectionMessage>;
   if (!data) return <Spinner />;
 
-  const P = data.params;
-  const cornered = data.people.filter((p) => p.state === 'cornered').length;
-  const wary = data.people.filter((p) => p.state === 'wary').length;
-
   return (
     <Stack space="space.300">
-      <Heading as="h2">The organism</Heading>
       <Text>
         For each person with open work in {data.projectKey}: how many independent sources press on them, across every project
         you can see, against how many people act alongside them. Counted to protect people, never to rank them.
       </Text>
-
       {data.people.length === 0 ? (
-        <Text>Nobody has an open request assigned in this project.</Text>
-      ) : (
-        <SectionMessage appearance={cornered > 0 ? 'warning' : wary > 0 ? 'information' : 'success'}>
-          <Text>
-            {plural(cornered, 'person is', 'people are')} cornered, {plural(wary, 'person is', 'people are')} wary,
-            out of {data.people.length}.
-          </Text>
+        <SectionMessage appearance="information">
+          <Text>Nobody has an open request assigned in this project yet. The Demo team tab shows Ngogo at work on a simulated team.</Text>
         </SectionMessage>
+      ) : (
+        <>
+          <Headline people={data.people} />
+          <PeopleTable people={data.people} />
+        </>
       )}
-
-      <DynamicTable
-        head={{
-          cells: [
-            { key: 'p', content: 'Person' }, { key: 'st', content: 'Balance of power' }, { key: 's', content: 'Sources' },
-            { key: 'a', content: 'Allies' }, { key: 'n', content: 'Open requests' }, { key: 'top', content: 'Main sources' },
-            { key: 'next', content: 'With one more ally' },
-          ],
-        }}
-        rows={data.people.map((p) => ({
-          key: p.id,
-          cells: [
-            { key: 'p', content: p.name },
-            { key: 'st', content: <StateLozenge state={p.state} ratio_centi={p.ratio_centi} /> },
-            { key: 's', content: String(p.source_count) },
-            { key: 'a', content: p.ally_count > 0 ? p.allies.map((a) => a.name).join(', ') : 'none' },
-            { key: 'n', content: String(p.open_requests) },
-            { key: 'top', content: p.sources.slice(0, 3).map((s) => `${s.label} (${s.requests})`).join(', ') || 'none' },
-            { key: 'next', content: `${ratioText(p.ratio_with_one_more_ally_centi)} : 1` },
-          ],
-        }))}
-      />
-
-      <Text>
-        Ratio = urgency-weighted sources / (1 + allies). An ally is someone other than the requester who acted on these requests
-        in the last {P.window_days} days. Wary from {ratioText(P.wary_centi)} : 1, cornered from {ratioText(P.cornered_centi)} : 1.
-        The eight-to-one line is a prudential default and a setting, not a published measurement.
-      </Text>
+      <Rule params={data.params} />
       <Caveats truncated={data.truncated} />
-      {engine ? (
+      {engine ? <Text>Decision engine check: {engine.steps} oracle steps replayed inside Forge, {engine.mismatchCount} mismatch.</Text> : null}
+    </Stack>
+  );
+};
+
+const Demo = () => {
+  const [state, setState] = useState(null);
+  const [view, setView] = useState(null);
+  const [busy, setBusy] = useState(false);
+
+  const reset = async () => {
+    const s = demoInitial(Date.now());
+    setState(s);
+    setView(await demoView(s));
+  };
+  useEffect(() => { reset(); }, []);
+
+  const act = (action) => async () => {
+    setBusy(true);
+    try {
+      await demoStep(state, action);
+      setView(await demoView(state));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!view) return <Spinner />;
+
+  return (
+    <Stack space="space.300">
+      <SectionMessage appearance="discovery" title="A simulated team">
         <Text>
-          Decision engine check: {engine.steps} oracle steps replayed inside Forge, {engine.mismatchCount} mismatch.
+          Twelve invented people and {view.requests} invented requests. Nothing is read from or written to your Jira here.
+          The numbers come from the same code that runs on your live project in the other tab.
         </Text>
-      ) : null}
+      </SectionMessage>
+
+      <ButtonGroup label="Story steps">
+        <Button appearance="primary" onClick={act('request')} isDisabled={busy}>One more request for Nadia</Button>
+        <Button onClick={act('ally')} isDisabled={busy}>Omar steps in</Button>
+        <Button onClick={act('days')} isDisabled={busy}>Two days pass</Button>
+        <Button appearance="subtle" onClick={reset} isDisabled={busy}>Start again</Button>
+      </ButtonGroup>
+
+      <Headline people={view.people} />
+
+      {view.held.map((h) => (
+        <SectionMessage key={h.key} appearance="warning" title={`${h.key} is held in incubation`}>
+          {h.lines.slice(0, 3).map((l) => <Text key={l}>{l}</Text>)}
+        </SectionMessage>
+      ))}
+
+      <PeopleTable people={view.people} />
+
+      <Box>
+        <Heading as="h3">Field log, day {view.day}</Heading>
+        <List type="ordered">
+          {view.log.map((l, i) => <ListItem key={String(i)}><Text><Strong>Day {l.day}.</Strong> {l.text}</Text></ListItem>)}
+        </List>
+      </Box>
+
+      <Rule params={view.params} />
+    </Stack>
+  );
+};
+
+const App = () => {
+  const context = useProductContext();
+  const projectKey = context?.extension?.project?.key;
+  return (
+    <Stack space="space.200">
+      <Heading as="h2">The organism</Heading>
+      <Tabs id="ngogo-organism-tabs">
+        <TabList>
+          <Tab>This project</Tab>
+          <Tab>Demo team</Tab>
+        </TabList>
+        <TabPanel><Box paddingBlockStart="space.200"><Live projectKey={projectKey} /></Box></TabPanel>
+        <TabPanel><Box paddingBlockStart="space.200"><Demo /></Box></TabPanel>
+      </Tabs>
     </Stack>
   );
 };

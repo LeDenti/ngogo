@@ -1,6 +1,6 @@
-// An in-memory store with the same interface as src/ngogo/store-jira.js, for tests.
+// An in-memory store with the same interface as store-jira.js.
+// Used by the tests and by the demo organisation: the index and the membrane run on it unchanged.
 // `issues` are in the plain shape (see normalize): {key, project, assignee, reporter, due, comments, done?, updatedDay?}.
-import { sourceOf } from '../src/ngogo/encirclement.js';
 
 const matches = (issue, sel) =>
   sel.kind === 'person'
@@ -36,4 +36,14 @@ export function createMemoryStore(issues, { pageSize = 100, today = 0 } = {}) {
     },
   };
 }
-export { sourceOf };
+
+/** In-memory notes with the same interface as notes-jira.js. */
+export function createMemoryNotes(records = new Map(), comments = []) {
+  return {
+    records, comments,
+    async read(key) { return records.get(key) ?? null; },
+    async write(key, r) { records.set(key, r); },
+    async comment(key, body) { comments.push([key, body]); },
+    async listIncubating() { return [...records].filter(([, r]) => r.state === 'incubating').map(([k]) => k); },
+  };
+}

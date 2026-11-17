@@ -4,7 +4,7 @@ import { dayOfInstant } from '../src/ngogo/encirclement.js';
 import { membraneDecision, pickAlly, incubationRecord, releasedRecord, sweepDecision, incubationLines, incubationComment, PROPERTY_KEY } from '../src/ngogo/membrane.js';
 import { onRequest, sweep } from '../src/ngogo/membrane-run.js';
 import { createJiraNotes } from '../src/ngogo/notes-jira.js';
-import { createMemoryStore } from './memory-store.mjs';
+import { createMemoryStore } from '../src/ngogo/store-memory.js';
 
 const NOW = Date.parse('2026-11-17T09:00:00Z');
 const TODAY = dayOfInstant(NOW);
