@@ -38,6 +38,158 @@ modules:
       description: Blocks the transition while Ngogo holds the request in incubation. Release it from the Ngogo panel first.
       expression: "issue.properties['ngogo-incubation'] == null || issue.properties['ngogo-incubation'].state != 'incubating'"
       errorMessage: Ngogo is holding this request in incubation because its assignee is cornered. Release it from the Ngogo panel, or wait for the hold to end.
+  rovo:agent:
+    - key: ngogo-agent
+      name: Ngogo
+      description: Counts the balance of power around each person in Jira, explains why a request is held, and helps turn a pile-on into a turn.
+      prompt: |
+        You are Ngogo. In the Ngogo forest, chimpanzees attack when they outnumber a victim eight to one.
+        Teams do the same thing politely, with due dates: many independent requesters converge on one person
+        who has few people helping. You count that balance of power in Jira and help turn it into a symbiosis.
+
+        What the numbers mean:
+        - A source is one independent requester with an open request on a person. A queue fed by automation counts as one source.
+        - An ally is someone other than the requester who acted on that person's open requests in the last 14 days.
+        - ratio = urgency-weighted sources / (1 + allies). Calm below 3, wary from 3, cornered from 8.
+          Eight to one is a prudential default and a setting, not a published measurement. Say so if asked.
+        - When a request lands on a cornered person, Ngogo holds it in incubation for 48 hours, explains why on the
+          request, and proposes an ally. Nothing is ever refused or deleted.
+
+        How to answer:
+        - Always call a tool for facts. Never invent a ratio, a count, a name or a date.
+        - Start from the tool's summary sentence, then give the few numbers that matter. Be brief and plain.
+        - Write people's names as plain text, exactly as the tool gives them. Never turn a name into a link or a mention.
+        - The index exists to protect people, never to rank them. Never describe a cornered person as slow,
+          overloaded by their own fault, or underperforming. Never blame requesters either: each request is legitimate,
+          it is the sum that corners. Do not turn the list into a league table.
+        - Always end with what would help: who could act alongside (the tool tells you what one more ally changes),
+          or which due date could move.
+        - If a tool says its answer is incomplete, say the real pressure is at least that high.
+        - If a tool returns an error, say what it said and ask for what is missing.
+
+        Jobs:
+        a. "Who is cornered?" in a project: use who-is-cornered. If no project is given and none is in context, ask for the key.
+        b. Questions about one request (why is it held, who is it landing on): use request-encirclement.
+        c. "What is held?": use held-requests.
+        d. Releasing a held request: only when the user clearly asks to release a specific request. Use release-request,
+           then tell them the person was cornered when it was held and suggest finding an ally anyway.
+        e. Invoice advance questions ("would the pool advance on this invoice?"): use advance-what-if. It is a what-if
+           with play numbers on a pool described in the question; say that no pool is stored and no money moves.
+      conversationStarters:
+        - Who is cornered in this project?
+        - Why is this request held, and what would help?
+        - What is Ngogo holding in incubation right now?
+      actions:
+        - who-is-cornered
+        - request-encirclement
+        - held-requests
+        - release-request
+        - advance-what-if
+  rovo:mcp:
+    - key: ngogo-mcp
+      name: Ngogo
+      tools:
+        - who-is-cornered
+        - request-encirclement
+        - held-requests
+        - release-request
+        - advance-what-if
+  action:
+    - key: who-is-cornered
+      name: Who is cornered in a project
+      function: whoIsCornered
+      actionVerb: GET
+      description: >
+        For everyone with open work in a Jira project: independent sources of pressure, allies, the ratio,
+        and whether they are calm, wary or cornered, most cornered first, with what one more ally would change. Read-only.
+      inputs:
+        projectKey:
+          title: Project key
+          type: string
+          required: false
+          description: The Jira project key, for example OPS. Leave empty to use the project the user is looking at.
+    - key: request-encirclement
+      name: Balance of power around a request
+      function: requestEncirclement
+      actionVerb: GET
+      description: >
+        For one Jira request, returns who it is assigned to, the balance of power around that person,
+        which source this request comes from, and whether Ngogo holds it in incubation and why. Read-only.
+      inputs:
+        issueKey:
+          title: Issue key
+          type: string
+          required: false
+          description: The Jira issue key, for example OPS-12. Leave empty to use the request the user is looking at.
+    - key: held-requests
+      name: Requests held in incubation
+      function: heldRequests
+      actionVerb: GET
+      description: >
+        Lists the requests Ngogo currently holds in incubation, with the person they landed on,
+        until when they are held, and the ally Ngogo proposed. Read-only.
+      inputs:
+        projectKey:
+          title: Project key
+          type: string
+          required: false
+          description: Only list held requests of this Jira project, for example OPS. Leave empty for every project.
+    - key: release-request
+      name: Release a held request
+      function: releaseRequest
+      actionVerb: UPDATE
+      description: >
+        Releases one request from Ngogo's incubation and notes it on the request, with the rights of the user asking.
+        Use only when the user explicitly asks to release a specific request.
+      inputs:
+        issueKey:
+          title: Issue key
+          type: string
+          required: false
+          description: The Jira issue key of the held request, for example OPS-12. Leave empty to use the request the user is looking at.
+    - key: advance-what-if
+      name: Would the pool advance on an invoice
+      function: advanceWhatIf
+      actionVerb: GET
+      description: >
+        What-if on the Ferret decision engine: would an invoice-advance pool of a given size advance cash on an invoice,
+        and if not, which ceiling refuses it. Play numbers only: nothing is stored, no money moves. Whole numbers.
+      inputs:
+        poolCapital:
+          title: Pool capital
+          type: integer
+          required: true
+          description: Total cash in the pool, a whole number.
+        face:
+          title: Invoice amount
+          type: integer
+          required: true
+          description: Face value of the invoice, a whole number.
+        advance:
+          title: Advance asked
+          type: integer
+          required: true
+          description: Cash asked now against the invoice, a whole number, at most 90 percent of the invoice.
+        daysUntilDue:
+          title: Days until due
+          type: integer
+          required: true
+          description: Days until the invoice is due to be paid by the debtor.
+        fee:
+          title: Fee
+          type: integer
+          required: false
+          description: Fee kept by the pool, a whole number. Defaults to 0.
+        debtorAlreadyOwes:
+          title: Debtor already owes
+          type: integer
+          required: false
+          description: What this debtor already owes the pool from earlier advances. Defaults to 0.
+        afterADefault:
+          title: After a default
+          type: boolean
+          required: false
+          description: True to ask the question just after another debtor defaulted, when the pool is wary.
   function:
     - key: resolver
       handler: index.handler
@@ -45,6 +197,16 @@ modules:
       handler: membrane.onIssueEvent
     - key: sweep
       handler: membrane.sweepHeld
+    - key: whoIsCornered
+      handler: actions.whoIsCornered
+    - key: requestEncirclement
+      handler: actions.requestEncirclement
+    - key: heldRequests
+      handler: actions.heldRequests
+    - key: releaseRequest
+      handler: actions.releaseRequest
+    - key: advanceWhatIf
+      handler: actions.advanceWhatIf
 resources:
   - key: main
     path: src/frontend/index.jsx
