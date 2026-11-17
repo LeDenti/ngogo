@@ -9,7 +9,8 @@ it has no server of its own, sends nothing outside Atlassian, and contains no an
 
 To compute the balance of power around a person, Ngogo reads from your Jira site, at the moment a screen or a tool asks for it:
 who a request is assigned to, who reported it, its due date, its project, and who commented on it and when.
-It does not read the text of requests or of comments.
+It never asks Jira for the title or the description of a request. Jira returns comments together with their text; Ngogo keeps
+only who commented and when, and discards the text at once.
 
 - On the screens, these reads are made with the Jira session of the person looking at the page.
 - In the Rovo agent and through the MCP server, they are made with the rights of the person asking.
