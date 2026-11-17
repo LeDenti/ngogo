@@ -10,7 +10,7 @@
 
 const SEARCH = '/rest/api/3/search/jql';
 const COUNT = '/rest/api/3/search/approximate-count';
-const BASE_FIELDS = ['assignee', 'reporter', 'duedate', 'project'];
+const BASE_FIELDS = ['assignee', 'reporter', 'duedate', 'project', 'created'];
 
 function person(u) {
   if (!u) return null;
@@ -26,6 +26,7 @@ export function normalize(i) {
     assignee: person(f.assignee),
     reporter: person(f.reporter),
     due: f.duedate ?? null,
+    created: f.created ?? null,
     comments: (f.comment?.comments ?? []).map((c) => ({ author: person(c.author), created: c.created })),
   };
 }

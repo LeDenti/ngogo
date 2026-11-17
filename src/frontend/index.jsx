@@ -1,13 +1,16 @@
 // Ngogo issue panel: the balance of power around the person this request lands on.
 import React, { useEffect, useState } from 'react';
-import ForgeReconciler, { useProductContext, Heading, Text, Strong, Stack, Inline, DynamicTable, Spinner, SectionMessage } from '@forge/react';
+import ForgeReconciler, { useProductContext, Heading, Text, Strong, Stack, Inline, DynamicTable, Spinner, SectionMessage, Button } from '@forge/react';
 import { issueEncirclement } from '../ngogo/views.js';
-import { store } from './jira-bridge';
+import { store, notes } from './jira-bridge';
+import { releasedRecord, releaseComment, incubationLines } from '../ngogo/membrane.js';
 import { StateLozenge, Caveats, ratioText, dueText, plural } from './shared';
 
 const App = () => {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
+  const [held, setHeld] = useState(null);
+  const [releasing, setReleasing] = useState(false);
 
   const context = useProductContext();
   const issueKey = context?.extension?.issue?.key;
@@ -15,7 +18,40 @@ const App = () => {
   useEffect(() => {
     if (!issueKey) return;
     issueEncirclement(store, issueKey).then(setData).catch((e) => setError(String(e)));
+    // The membrane's record on this request, if it was ever held. Failing to read it must not hide the index.
+    notes.read(issueKey).then(setHeld).catch(() => setHeld(null));
   }, [issueKey]);
+
+  // Releasing is done with the viewer's own Jira rights: whoever can edit the request can release it.
+  const release = async () => {
+    setReleasing(true);
+    try {
+      const released = releasedRecord(held, 'released_by_hand', Date.now(), context?.accountId ?? null);
+      await notes.write(issueKey, released);
+      await notes.comment(issueKey, releaseComment(released));
+      setHeld(released);
+    } catch (e) {
+      setError(`could not release it (${String(e)})`);
+    } finally {
+      setReleasing(false);
+    }
+  };
+
+  const Membrane = () => {
+    if (!held) return null;
+    if (held.state === 'incubating') {
+      const lines = incubationLines(held);
+      return (
+        <SectionMessage appearance="warning" title="Held in incubation">
+          {lines.slice(0, 3).map((l) => <Text key={l}>{l}</Text>)}
+          <Button appearance="primary" onClick={release} isDisabled={releasing}>
+            {releasing ? 'Releasing…' : 'Release now'}
+          </Button>
+        </SectionMessage>
+      );
+    }
+    return <Text>Ngogo held this request from {held.since.slice(0, 10)} and released it on {held.released_at.slice(0, 10)}.</Text>;
+  };
 
   if (error) return <SectionMessage appearance="error"><Text>Ngogo could not read this request: {error}</Text></SectionMessage>;
   if (!data) return <Spinner />;
@@ -28,6 +64,7 @@ const App = () => {
 
   return (
     <Stack space="space.200">
+      <Membrane />
       <Inline space="space.100" alignBlock="center">
         <Heading as="h3">{p.name}</Heading>
         <StateLozenge state={p.state} ratio_centi={p.ratio_centi} />

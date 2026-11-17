@@ -14,9 +14,37 @@ modules:
         function: resolver
       render: native
       title: Ngogo
+  trigger:
+    - key: ngogo-membrane-trigger
+      function: membrane
+      events:
+        - avi:jira:created:issue
+        - avi:jira:assigned:issue
+  scheduledTrigger:
+    - key: ngogo-membrane-sweep
+      function: sweep
+      interval: hour
+  jira:entityProperty:
+    - key: ngogo-incubation-index
+      entityType: issue
+      propertyKey: ngogo-incubation
+      values:
+        - path: state
+          type: string
+          searchAlias: ngogoState
+  jira:workflowValidator:
+    - key: ngogo-not-held
+      name: "Ngogo: not held in incubation"
+      description: Blocks the transition while Ngogo holds the request in incubation. Release it from the Ngogo panel first.
+      expression: "issue.properties['ngogo-incubation'] == null || issue.properties['ngogo-incubation'].state != 'incubating'"
+      errorMessage: Ngogo is holding this request in incubation because its assignee is cornered. Release it from the Ngogo panel, or wait for the hold to end.
   function:
     - key: resolver
       handler: index.handler
+    - key: membrane
+      handler: membrane.onIssueEvent
+    - key: sweep
+      handler: membrane.sweepHeld
 resources:
   - key: main
     path: src/frontend/index.jsx
@@ -25,6 +53,7 @@ resources:
 permissions:
   scopes:
     - read:jira-work
+    - write:jira-work
 app:
   runtime:
     name: nodejs24.x
