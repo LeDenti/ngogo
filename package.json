@@ -6,7 +6,8 @@
   "private": true,
   "scripts": {
     "lint": "eslint src/**/*",
-    "replay": "node test/replay-all.mjs"
+    "replay": "node test/replay-all.mjs",
+    "test": "node --no-warnings --test test/*.test.mjs"
   },
   "devDependencies": {
     "eslint": "^8.56.0",

@@ -7,12 +7,24 @@ modules:
       render: native
       title: Ngogo
       icon: https://developer.atlassian.com/platform/forge/images/icons/issue-panel-icon.svg
+  jira:projectPage:
+    - key: ngogo-organism
+      resource: organism
+      resolver:
+        function: resolver
+      render: native
+      title: Ngogo
   function:
     - key: resolver
       handler: index.handler
 resources:
   - key: main
     path: src/frontend/index.jsx
+  - key: organism
+    path: src/frontend/organism.jsx
+permissions:
+  scopes:
+    - read:jira-work
 app:
   runtime:
     name: nodejs24.x
