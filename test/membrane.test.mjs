@@ -190,6 +190,8 @@ test('Jira notes: exact paths, 404 means no record, and nothing but an issue key
     'POST /rest/api/3/search/jql',
   ]);
   assert.equal(sent[3][2].jql, 'ngogoState = "incubating" ORDER BY created ASC');
+  // Never e-mailed to a service desk customer.
+  assert.deepEqual(sent[2][2].properties, [{ key: 'sd.public.comment', value: { internal: true } }]);
   for (const bad of ['OPS-1/../../user', 'ops-1', 'OPS-1?x=1', '', 'OPS-']) await assert.rejects(() => notes.read(bad), /not a Jira issue key/);
   assert.equal(incubationLines({ person: { name: 'N' }, until: '2026-11-19T09:00:00.000Z', source_count: 1, ally_count: 1, ratio_centi: 900, cornered_centi: 800, suggested_ally: null })[1].includes('1 independent source with 1 person acting'), true);
 });

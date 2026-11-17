@@ -10,6 +10,8 @@ const safe = (key) => {
 };
 const propertyPath = (key) => `/rest/api/3/issue/${safe(key)}/properties/${PROPERTY_KEY}`;
 
+const INTERNAL = [{ key: 'sd.public.comment', value: { internal: true } }];
+
 export function createJiraNotes(call) {
   return {
     /** The incubation record of a request, or null. */
@@ -23,8 +25,13 @@ export function createJiraNotes(call) {
       const res = await call('PUT', propertyPath(key), record);
       if (!res.ok) throw new Error(`writing the incubation record failed with status ${res.status}`);
     },
+    /**
+     * Adds a comment. On Jira Service Management requests a comment made through the API is public
+     * by default, and would be e-mailed to the customer: Ngogo's notices talk about a colleague's load,
+     * so they are always marked internal. The property is ignored on other kinds of projects.
+     */
     async comment(key, body) {
-      const res = await call('POST', `/rest/api/3/issue/${safe(key)}/comment`, { body });
+      const res = await call('POST', `/rest/api/3/issue/${safe(key)}/comment`, { body, properties: INTERNAL });
       if (!res.ok) throw new Error(`commenting failed with status ${res.status}`);
     },
     /** Keys of the requests currently held (uses the searchable alias declared in the manifest). */
