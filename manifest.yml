@@ -14,6 +14,20 @@ modules:
         function: resolver
       render: native
       title: Ngogo
+  jiraServiceManagement:portalRequestDetailPanel:
+    - key: ngogo-portal-advance
+      resource: portal
+      resolver:
+        function: resolver
+      render: native
+      title: Invoice advance
+  jiraServiceManagement:queuePage:
+    - key: ngogo-queue-page
+      resource: organism
+      resolver:
+        function: resolver
+      render: native
+      title: Ngogo
   trigger:
     - key: ngogo-membrane-trigger
       function: membrane
@@ -212,10 +226,13 @@ resources:
     path: src/frontend/index.jsx
   - key: organism
     path: src/frontend/organism.jsx
+  - key: portal
+    path: src/frontend/portal.jsx
 permissions:
   scopes:
     - read:jira-work
     - write:jira-work
+    - storage:app
 app:
   runtime:
     name: nodejs24.x

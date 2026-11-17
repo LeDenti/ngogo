@@ -5,6 +5,7 @@ import { DEFAULT_PARAMS, formatRatio } from './encirclement.js';
 import { issueEncirclement, projectOrganism } from './views.js';
 import { incubationLines, releasedRecord, releaseComment } from './membrane.js';
 import { InvoicePool } from '../engine/invoices.js';
+import { WHY } from './pool.js';
 
 const PROJECT_KEY = /^[A-Z][A-Z0-9_]{1,30}$/;
 const ISSUE_KEY = /^[A-Z][A-Z0-9_]{0,30}-[0-9]{1,12}$/;
@@ -113,19 +114,6 @@ export async function releaseRequest(notes, { issueKey }, accountId, nowMs = Dat
   return { ok: true, released: true, summary: `${issueKey} is released from incubation. ${record.person.name} was at ${formatRatio(record.ratio_centi)} to 1 when it was held.` };
 }
 
-const WHY = {
-  zero_amount: 'an amount is zero or negative',
-  below_minimum: 'the invoice is below the minimum face value',
-  analysis_required: 'no analysis of the invoice was provided',
-  advance_above_face: 'the advance is larger than the invoice',
-  fee_above_face: 'the fee is larger than the invoice',
-  due_passed: 'the due date has already passed',
-  term_too_long: 'the due date is further away than the pool accepts in its current mood',
-  advance_above_cap: 'the advance is a larger share of the invoice than the pool accepts',
-  concentration_breached: 'this debtor would owe a larger share of the pool than it accepts in its current mood',
-  debtor_cap_breached: 'this debtor would owe more than the absolute ceiling',
-  pool_illiquid: 'the pool does not have that much free cash',
-};
 const whole = (v) => Number.isInteger(v) && v >= 0 && v <= 1_000_000_000;
 
 /**

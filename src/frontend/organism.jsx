@@ -11,6 +11,7 @@ import { projectOrganism } from '../ngogo/views.js';
 import { demoInitial, demoStep, demoView } from '../ngogo/demo.js';
 import { store } from './jira-bridge';
 import { Caveats, PeopleTable, Headline, Rule } from './shared';
+import { PoolOfProject } from './pool-project';
 
 const Live = ({ projectKey }) => {
   const [data, setData] = useState(null);
@@ -123,9 +124,11 @@ const App = () => {
         <TabList>
           <Tab>This project</Tab>
           <Tab>Demo team</Tab>
+          <Tab>Pool</Tab>
         </TabList>
         <TabPanel><Box paddingBlockStart="space.200"><Live projectKey={projectKey} /></Box></TabPanel>
         <TabPanel><Box paddingBlockStart="space.200"><Demo /></Box></TabPanel>
+        <TabPanel><Box paddingBlockStart="space.200"><PoolOfProject /></Box></TabPanel>
       </Tabs>
     </Stack>
   );

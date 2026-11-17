@@ -1,12 +1,13 @@
 // Ngogo issue panel: the balance of power around the person this request lands on.
 import React, { useEffect, useState } from 'react';
-import ForgeReconciler, { useProductContext, Heading, Text, Strong, Stack, Inline, DynamicTable, Spinner, SectionMessage, Button } from '@forge/react';
+import ForgeReconciler, { useProductContext, Heading, Text, Strong, Stack, Inline, DynamicTable, Spinner, SectionMessage, Button, Tabs, TabList, Tab, TabPanel, Box } from '@forge/react';
 import { issueEncirclement } from '../ngogo/views.js';
 import { store, notes } from './jira-bridge';
 import { releasedRecord, releaseComment, incubationLines } from '../ngogo/membrane.js';
+import { PoolOnRequest } from './pool-issue';
 import { StateLozenge, Caveats, ratioText, dueText, plural } from './shared';
 
-const App = () => {
+const Balance = () => {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [held, setHeld] = useState(null);
@@ -118,6 +119,17 @@ const App = () => {
     </Stack>
   );
 };
+
+const App = () => (
+  <Tabs id="ngogo-panel-tabs">
+    <TabList>
+      <Tab>Balance of power</Tab>
+      <Tab>Pool</Tab>
+    </TabList>
+    <TabPanel><Box paddingBlockStart="space.200"><Balance /></Box></TabPanel>
+    <TabPanel><Box paddingBlockStart="space.200"><PoolOnRequest /></Box></TabPanel>
+  </Tabs>
+);
 
 ForgeReconciler.render(
   <React.StrictMode>
