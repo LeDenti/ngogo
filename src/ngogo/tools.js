@@ -72,7 +72,7 @@ export async function requestEncirclement(store, notes, { issueKey }, nowMs = Da
     assignee: personBrief(p),
     this_request_comes_from: r.thisRequest.selfRaised ? 'the assignee themself (no outside pressure)' : src ? src.label : null,
     held: record
-      ? { state: record.state, since: record.since, until: record.until, release_reason: record.release_reason ?? null, notice: record.state === 'incubating' ? incubationLines(record) : null }
+      ? { state: record.state, since: record.since, until: record.until, release_reason: record.release_reason ?? null, notice: record.state === 'incubating' ? incubationLines(record, { person: p.name }) : null }
       : null,
     rule: RULE,
     incomplete: r.truncated,
@@ -80,7 +80,7 @@ export async function requestEncirclement(store, notes, { issueKey }, nowMs = Da
 }
 
 /** The requests Ngogo currently holds in incubation, optionally for one project. */
-export async function heldRequests(notes, { projectKey } = {}) {
+export async function heldRequests(store, notes, { projectKey } = {}) {
   if (projectKey !== undefined && projectKey !== null && projectKey !== '' && !PROJECT_KEY.test(String(projectKey))) {
     return refuse('Give a Jira project key, for example OPS, or none for every project.');
   }
@@ -89,9 +89,11 @@ export async function heldRequests(notes, { projectKey } = {}) {
   for (const key of keys.slice(0, 25)) {
     const r = await notes.read(key).catch(() => null);
     if (!r || r.state !== 'incubating') continue;
+    // The assignee is read live from Jira, with the asker's rights: Ngogo stores no name.
+    const issue = await store.getIssue(key).catch(() => null);
     held.push({
-      request: key, assignee: r.person.name, held_since: r.since, held_until: r.until,
-      ratio_when_held: `${formatRatio(r.ratio_centi)} : 1`, suggested_ally: r.suggested_ally?.name ?? null,
+      request: key, assignee: issue?.assignee?.name ?? null, held_since: r.since, held_until: r.until,
+      ratio_when_held: `${formatRatio(r.ratio_centi)} : 1`, ally_proposed_in_the_notice: Boolean(r.ally_proposed ?? r.suggested_ally),
     });
   }
   return {
@@ -103,15 +105,15 @@ export async function heldRequests(notes, { projectKey } = {}) {
 }
 
 /** Releases one held request, with the rights of the person asking. */
-export async function releaseRequest(notes, { issueKey }, accountId, nowMs = Date.now()) {
+export async function releaseRequest(notes, { issueKey }, nowMs = Date.now()) {
   if (!ISSUE_KEY.test(String(issueKey ?? ''))) return refuse('Give a Jira issue key, for example OPS-12.');
   const record = await notes.read(issueKey);
   if (!record) return { ok: true, released: false, summary: `Ngogo never held ${issueKey}.` };
   if (record.state !== 'incubating') return { ok: true, released: false, summary: `${issueKey} is not held any more (${record.release_reason ?? 'released'}).` };
-  const released = releasedRecord(record, 'released_by_hand', nowMs, accountId ?? null);
+  const released = releasedRecord(record, 'released_by_hand', nowMs);
   await notes.write(issueKey, released);
   await notes.comment(issueKey, releaseComment(released));
-  return { ok: true, released: true, summary: `${issueKey} is released from incubation. ${record.person.name} was at ${formatRatio(record.ratio_centi)} to 1 when it was held.` };
+  return { ok: true, released: true, summary: `${issueKey} is released from incubation. Its assignee was at ${formatRatio(record.ratio_centi)} to 1 when it was held.` };
 }
 
 const whole = (v) => Number.isInteger(v) && v >= 0 && v <= 1_000_000_000;

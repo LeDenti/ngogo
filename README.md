@@ -93,13 +93,16 @@ src/frontend/               UI Kit screens: issue panel, project page, customer 
 src/membrane.js, actions.js, resolvers/   Forge entry points
 ```
 
-Three choices that matter:
+Four choices that matter:
 
 - **Discovery by exclusion.** A person can have ten thousand open requests. Ngogo never reads them all: it asks Jira for
   "a request from a source I have not seen yet", notes the new sources, and asks again. A test proves the answer equals
   reading every request.
 - **The viewer's own rights.** The screens read Jira through the Forge bridge with the session of the person looking,
   and the agent tools run as the person asking. Nobody is shown a request they may not browse, and there is no consent screen.
+- **No personal data stored.** What Ngogo keeps is counts, dates and amounts: an issue property for a hold, a journal for the
+  pool. No account id and no name is stored anywhere. Names appear only in the notice, an ordinary Jira comment, and on screen,
+  read live from Jira. Tests assert it.
 - **Pure cores, swappable stores.** The index, the membrane and the pool are pure functions over a store interface. Live Jira,
   the tests and the Demo team are three stores for the same code.
 
@@ -111,7 +114,7 @@ Forge modules: `jira:issuePanel`, `jira:projectPage`, `jiraServiceManagement:por
 
 ```bash
 npm install
-npm test          # 47 tests, Node 24
+npm test          # 49 tests, Node 24
 npm run replay    # replays the 4 926 steps of Ferret's oracle against the embedded engine (needs the ferret repository)
 ```
 

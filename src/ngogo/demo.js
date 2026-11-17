@@ -70,7 +70,7 @@ export function demoInitial(nowMs = Date.now()) {
     target.comments.push({ author: PEOPLE[who], created: new Date(noon(today - daysAgo)).toISOString() });
     target.updatedDay = today - daysAgo;
   }
-  return { today, issues, records: new Map(), seq: n, extra: 0, log: [{ day: 0, text: 'Monday morning. Sixty open requests across a team of twelve.' }], start: today };
+  return { today, issues, records: new Map(), allies: new Map(), seq: n, extra: 0, log: [{ day: 0, text: 'Monday morning. Sixty open requests across a team of twelve.' }], start: today };
 }
 
 const storeOf = (state) => createMemoryStore(state.issues, { today: state.today });
@@ -82,7 +82,7 @@ export async function demoView(state) {
   const organism = await projectOrganism(storeOf(state), DEMO_PROJECT, noon(state.today));
   const held = [...state.records]
     .filter(([, r]) => r.state === 'incubating')
-    .map(([key, r]) => ({ key, lines: incubationLines(r) }));
+    .map(([key, r]) => ({ key, lines: incubationLines(r, { person: state.issues.find((i) => i.key === key)?.assignee?.name, ally: state.allies.get(key) }) }));
   return { ...organism, held, log: state.log, day: state.today - state.start, requests: state.issues.length };
 }
 
@@ -115,7 +115,8 @@ export async function demoStep(state, action) {
     });
     const r = await onRequest(storeOf(state), notesOf(state), key, noon(state.today), { event: 'created', allyBudgetMs: 5_000 });
     if (r.action === 'incubate') {
-      const ally = r.record.suggested_ally ? ` It proposes ${r.record.suggested_ally.name} as an ally.` : '';
+      if (r.ally) state.allies.set(key, r.ally); // invented names, kept in memory for the screen only
+      const ally = r.ally ? ` It proposes ${r.ally} as an ally.` : '';
       say(state, `${requester.name} sends Nadia a request due in two days (${key}). That makes Nadia cornered: Ngogo holds it in incubation.${ally}`);
     } else {
       say(state, `${requester.name} sends Nadia a request due in two days (${key}). Nadia is not cornered: it goes straight through.`);

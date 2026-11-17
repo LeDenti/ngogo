@@ -37,10 +37,10 @@ export const requestEncirclement = answer('request-encirclement', (p) =>
   tools.requestEncirclement(store, notes, { issueKey: text(p.issueKey) ?? here(p).issueKey }));
 
 export const heldRequests = answer('held-requests', (p) =>
-  tools.heldRequests(notes, { projectKey: text(p.projectKey) }));
+  tools.heldRequests(store, notes, { projectKey: text(p.projectKey) }));
 
-export const releaseRequest = answer('release-request', (p, context) =>
-  tools.releaseRequest(notes, { issueKey: text(p.issueKey) ?? here(p).issueKey }, context?.principal?.accountId ?? p?.context?.accountId ?? null));
+export const releaseRequest = answer('release-request', (p) =>
+  tools.releaseRequest(notes, { issueKey: text(p.issueKey) ?? here(p).issueKey }));
 
 export const advanceWhatIf = answer('advance-what-if', (p) =>
   tools.advanceWhatIf({

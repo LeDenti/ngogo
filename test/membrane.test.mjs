@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { dayOfInstant } from '../src/ngogo/encirclement.js';
-import { membraneDecision, pickAlly, incubationRecord, releasedRecord, sweepDecision, incubationLines, incubationComment, PROPERTY_KEY } from '../src/ngogo/membrane.js';
+import { membraneDecision, pickAlly, incubationRecord, releasedRecord, sweepDecision, incubationLines, incubationComment, withoutPeople, PROPERTY_KEY } from '../src/ngogo/membrane.js';
 import { onRequest, sweep } from '../src/ngogo/membrane-run.js';
 import { createJiraNotes } from '../src/ngogo/notes-jira.js';
 import { createMemoryStore } from '../src/ngogo/store-memory.js';
@@ -41,9 +41,8 @@ test('the decision: hold only an outside request landing on a cornered person, o
   assert.equal(membraneDecision(issue, { state: 'wary' }, null).reason, 'not_cornered');
   assert.equal(membraneDecision({ ...issue, assignee: null }, { state: 'cornered' }, null).reason, 'unassigned');
   assert.equal(membraneDecision({ ...issue, reporter: nadia }, { state: 'cornered' }, null).reason, 'self_raised');
-  assert.equal(membraneDecision(issue, { state: 'cornered' }, { person: { id: nadia.id }, state: 'released' }).reason, 'already_decided');
-  // Reassigned to another cornered person: a new decision.
-  assert.equal(membraneDecision(issue, { state: 'cornered' }, { person: { id: omar.id }, state: 'released' }).action, 'incubate');
+  assert.equal(membraneDecision(issue, { state: 'cornered' }, { state: 'released' }).reason, 'already_decided');
+  assert.equal(membraneDecision(issue, { state: 'cornered' }, { state: 'incubating' }).reason, 'already_decided');
 });
 
 test('the ally is the calmest colleague; nobody calm means nobody proposed', () => {
@@ -60,11 +59,13 @@ test('a tenth request on Nadia is held, explained on the request, with Omar prop
   assert.equal(r.action, 'incubate');
   const rec = notes.records.get('OPS-99');
   assert.equal(rec.state, 'incubating');
-  assert.equal(rec.person.name, 'Nadia');
   assert.equal(rec.ratio_centi, 1000);
   assert.equal(rec.source_count, 10);
   assert.equal(rec.until, new Date(NOW + 48 * HOUR).toISOString());
-  assert.deepEqual(rec.suggested_ally, { id: 'u-Omar', name: 'Omar', ratio_centi: 100 });
+  assert.deepEqual([rec.ally_proposed, rec.ally_ratio_centi, r.ally], [true, 100, 'Omar']);
+  // What Ngogo stores about the hold says nothing about anyone: counts and dates only.
+  assert.deepEqual(Object.keys(rec).sort(), ['ally_count', 'ally_proposed', 'ally_ratio_centi', 'cornered_centi', 'ratio_centi', 'since', 'source_count', 'state', 'until', 'v']);
+  assert.doesNotMatch(JSON.stringify(rec), /Nadia|Omar|u-/);
   assert.equal(notes.comments.length, 1);
   const said = text(notes.comments[0][1]);
   assert.match(said, /holding this request in incubation until 2026-11-19 09:00 UTC/);
@@ -133,7 +134,7 @@ test('when nobody is calm the notice says it is a staffing question', async () =
   const issues = [...TEAM.filter((i) => i.assignee.id !== omar.id), mk('OPS-99', 'OPS', nadia, user('r9'))];
   const notes = memoryNotes();
   await onRequest(createMemoryStore(issues, { today: TODAY }), notes, 'OPS-99', NOW);
-  assert.equal(notes.records.get('OPS-99').suggested_ally, null);
+  assert.equal(notes.records.get('OPS-99').ally_proposed, false);
   assert.match(text(notes.comments[0][1]), /staffing question, not a routing one/);
 });
 
@@ -144,20 +145,23 @@ test('a slow search for an ally never blocks the hold', async () => {
   const notes = memoryNotes();
   const r = await onRequest(slow, notes, 'OPS-99', NOW, { allyBudgetMs: 10 });
   assert.equal(r.action, 'incubate');
-  assert.equal(r.record.suggested_ally, null);
+  assert.equal(r.record.ally_proposed, false);
 });
 
 test('the sweep releases what is expired, relieved or reassigned, and keeps the rest', async () => {
-  const rec = (person, sinceMs) => incubationRecord({ assignee: person }, { ratio_centi: 1000, source_count: 10, ally_count: 0 }, null, sinceMs, undefined, { cornered_centi: 800 });
+  const rec = (sinceMs) => incubationRecord({ ratio_centi: 1000, source_count: 10, ally_count: 0 }, null, sinceMs, undefined, { cornered_centi: 800 });
   const issue = mk('A-1', 'OPS', nadia, user('r0'));
-  assert.deepEqual(sweepDecision(rec(nadia, NOW), issue, { state: 'cornered' }, NOW + HOUR), { action: 'keep' });
-  assert.deepEqual(sweepDecision(rec(nadia, NOW), issue, { state: 'wary' }, NOW + HOUR), { action: 'release', reason: 'relieved' });
-  assert.deepEqual(sweepDecision(rec(nadia, NOW), issue, { state: 'cornered' }, NOW + 48 * HOUR), { action: 'release', reason: 'expired' });
-  assert.deepEqual(sweepDecision(rec(nadia, NOW), { ...issue, assignee: omar }, null, NOW + HOUR), { action: 'release', reason: 'reassigned' });
-  assert.deepEqual(sweepDecision(releasedRecord(rec(nadia, NOW), 'expired', NOW), issue, null, NOW + 99 * HOUR), { action: 'keep' });
+  assert.deepEqual(sweepDecision(rec(NOW), issue, { state: 'cornered' }, NOW + HOUR), { action: 'keep' });
+  assert.deepEqual(sweepDecision(rec(NOW), issue, { state: 'wary' }, NOW + HOUR), { action: 'release', reason: 'relieved' });
+  assert.deepEqual(sweepDecision(rec(NOW), issue, { state: 'cornered' }, NOW + 48 * HOUR), { action: 'release', reason: 'expired' });
+  // Reassigned to someone calm: the index passed in is the new assignee's, and nobody cornered holds it any more.
+  assert.deepEqual(sweepDecision(rec(NOW), { ...issue, assignee: omar }, { state: 'calm' }, NOW + HOUR), { action: 'release', reason: 'relieved' });
+  assert.deepEqual(sweepDecision(rec(NOW), { ...issue, assignee: null }, null, NOW + HOUR), { action: 'release', reason: 'reassigned' });
+  assert.deepEqual(sweepDecision(releasedRecord(rec(NOW), 'expired', NOW), issue, null, NOW + 99 * HOUR), { action: 'keep' });
 
   // End to end: two held requests on Nadia; one hour later nothing moves; an ally shows up; both are released.
-  const issues = [...TEAM, mk('OPS-98', 'OPS', nadia, user('r8')), mk('OPS-99', 'OPS', nadia, user('r9'))];
+  // A private copy: this scenario adds a comment, and must not leak into the other tests.
+  const issues = structuredClone([...TEAM, mk('OPS-98', 'OPS', nadia, user('r8')), mk('OPS-99', 'OPS', nadia, user('r9'))]);
   const notes = memoryNotes();
   const store = createMemoryStore(issues, { today: TODAY });
   await onRequest(store, notes, 'OPS-98', NOW);
@@ -167,7 +171,7 @@ test('the sweep releases what is expired, relieved or reassigned, and keeps the 
   issues[0].updatedDay = TODAY;
   assert.deepEqual(await sweep(store, notes, NOW + 2 * HOUR), [{ key: 'OPS-98', reason: 'relieved' }, { key: 'OPS-99', reason: 'relieved' }]);
   assert.equal(notes.records.get('OPS-99').state, 'released');
-  assert.match(text(notes.comments.at(-1)[1]), /released this request from incubation: the person is no longer cornered/);
+  assert.match(text(notes.comments.at(-1)[1]), /released this request from incubation: nobody cornered holds it any more/);
   assert.deepEqual(await sweep(store, notes, NOW + 3 * HOUR), []);
 });
 
@@ -181,7 +185,7 @@ test('Jira notes: exact paths, 404 means no record, and nothing but an issue key
   const notes = createJiraNotes(call);
   assert.equal(await notes.read('OPS-12'), null);
   await notes.write('OPS-12', { state: 'incubating' });
-  await notes.comment('OPS-12', incubationComment({ person: { name: 'N' }, until: '2026-11-19T09:00:00.000Z', source_count: 1, ally_count: 1, ratio_centi: 900, cornered_centi: 800, suggested_ally: null }));
+  await notes.comment('OPS-12', incubationComment({ until: '2026-11-19T09:00:00.000Z', source_count: 1, ally_count: 1, ratio_centi: 900, cornered_centi: 800, ally_proposed: false }, { person: 'N' }));
   assert.deepEqual(await notes.listIncubating(5), ['OPS-1']);
   assert.deepEqual(sent.map(([m, p]) => `${m} ${p}`), [
     `GET /rest/api/3/issue/OPS-12/properties/${PROPERTY_KEY}`,
@@ -193,5 +197,24 @@ test('Jira notes: exact paths, 404 means no record, and nothing but an issue key
   // Never e-mailed to a service desk customer.
   assert.deepEqual(sent[2][2].properties, [{ key: 'sd.public.comment', value: { internal: true } }]);
   for (const bad of ['OPS-1/../../user', 'ops-1', 'OPS-1?x=1', '', 'OPS-']) await assert.rejects(() => notes.read(bad), /not a Jira issue key/);
-  assert.equal(incubationLines({ person: { name: 'N' }, until: '2026-11-19T09:00:00.000Z', source_count: 1, ally_count: 1, ratio_centi: 900, cornered_centi: 800, suggested_ally: null })[1].includes('1 independent source with 1 person acting'), true);
+  assert.equal(incubationLines({ until: '2026-11-19T09:00:00.000Z', source_count: 1, ally_count: 1, ratio_centi: 900, cornered_centi: 800, ally_proposed: false }, { person: 'N' })[1].includes('N is already pressed by 1 independent source with 1 person acting'), true);
+});
+
+test('a record from an earlier version loses everything it said about people', async () => {
+  const old = { v: 1, state: 'incubating', person: { id: 'u-nadia', name: 'Nadia' }, since: '2026-11-17T05:03:05.726Z', until: '2026-11-19T05:03:05.726Z',
+    ratio_centi: 1500, source_count: 19, ally_count: 0, cornered_centi: 800, suggested_ally: { id: 'u-omar', name: 'Omar', ratio_centi: 60 }, released_by: 'acct' };
+  const clean = withoutPeople(old);
+  assert.doesNotMatch(JSON.stringify(clean), /Nadia|Omar|u-|acct/);
+  assert.deepEqual([clean.v, clean.ally_proposed, clean.ally_ratio_centi, clean.ratio_centi], [2, true, 60, 1500]);
+  assert.equal(withoutPeople(clean), clean);
+  // Without a name to hand, the notice still reads, and points to the comment for the ally.
+  assert.match(incubationLines(clean)[1], /^The assignee is already pressed by 19 independent sources/);
+  assert.match(incubationLines(clean)[2], /proposed an ally in its notice/);
+  // The sweep cleans such a record in place while it is still held.
+  const issues = [...TEAM, mk('OPS-99', 'OPS', nadia, user('r9'))];
+  const notes = memoryNotes();
+  notes.records.set('OPS-99', { ...old, until: new Date(NOW + 24 * HOUR).toISOString() });
+  await sweep(createMemoryStore(issues, { today: TODAY }), notes, NOW);
+  assert.doesNotMatch(JSON.stringify(notes.records.get('OPS-99')), /Nadia|Omar|u-|acct/);
+  assert.equal(notes.records.get('OPS-99').state, 'incubating');
 });

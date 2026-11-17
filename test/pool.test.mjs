@@ -1,14 +1,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { newBook, act, view, invoiceView, MAX_EVENTS } from '../src/ngogo/pool.js';
+import { newBook, act, view, invoiceView, withoutPeople, MAX_EVENTS } from '../src/ngogo/pool.js';
 
 const D0 = 20_000; // any day number
-const ask = (extra = {}) => ({ invoice: 'FIN-1', supplier: 'Nadia', debtor: 'Acme', face: 5_000, advance: 4_500, fee: 50, days: 30, analysis: true, ...extra });
+const ask = (extra = {}) => ({ invoice: 'FIN-1', debtor: 'Acme', face: 5_000, advance: 4_500, fee: 50, days: 30, analysis: true, ...extra });
 // Runs a list of [day offset, op, input, who] and returns the book and every result.
 function run(steps, book = newBook(D0)) {
   const results = [];
-  for (const [day, op, input, who = 'lea'] of steps) {
-    const r = act(book, D0 + day, op, input, who);
+  for (const [day, op, input] of steps) {
+    const r = act(book, D0 + day, op, input);
     book = r.book;
     results.push(r.result);
   }
@@ -22,10 +22,10 @@ test('a funded pool advances on a checked invoice, and the book shows it', () =>
   assert.deepEqual([v.capital, v.free_cash, v.outstanding, v.mood], [20_000, 15_500, 4_500, 'calm']);
   assert.deepEqual(v.exposures, [{ debtor: 'acme', owed: 4_550 }]);
   assert.deepEqual(v.advances[0], {
-    invoice: 'FIN-1', supplier: 'Nadia', debtor: 'acme', face: 5_000, advance: 4_500, fee: 50, repaid: 0, still_owed: 4_550,
+    invoice: 'FIN-1', debtor: 'acme', face: 5_000, advance: 4_500, fee: 50, repaid: 0, still_owed: 4_550,
     status: 'funded', due_in_days: 30, can_be_written_off_in_days: 37,
   });
-  assert.equal(v.log.at(-1).text, 'Nadia asks 4500 on invoice FIN-1 of 5000 owed by acme, due in 30 days: accepted.');
+  assert.equal(v.log.at(-1).text, 'An advance of 4500 is asked on invoice FIN-1 of 5000 owed by acme, due in 30 days: accepted.');
 });
 
 test('every refusal comes with its reason in plain words, and is journalled', () => {
@@ -69,12 +69,12 @@ test('repaid in full by default; a default makes the pool wary and its ceilings 
 test('nothing reaches the engine unchecked', () => {
   const funded = run([[0, 'deposit', { amount: 20_000 }]]).book;
   for (const bad of [{ face: 1.5 }, { advance: -1 }, { fee: '10' }, { days: null }, { debtor: '   ' }, { invoice: '' }, { face: 2_000_000_000 }]) {
-    const r = act(funded, D0, 'advance', ask(bad), 'lea');
+    const r = act(funded, D0, 'advance', ask(bad));
     assert.equal(r.result.ok, false, JSON.stringify(bad));
     assert.equal(r.book, funded); // invalid input never enters the journal
   }
-  assert.equal(act(funded, D0, 'deposit', { amount: 0 }, 'lea').result.ok, false);
-  assert.equal(act(funded, D0, 'steal', {}, 'lea').result.ok, false);
+  assert.equal(act(funded, D0, 'deposit', { amount: 0 }).result.ok, false);
+  assert.equal(act(funded, D0, 'steal', {}).result.ok, false);
   // Debtor names are folded, so "ACME " and "acme" are one debtor for the concentration ceiling.
   const two = run([[0, 'advance', ask({ debtor: '  ACME ' })], [0, 'advance', ask({ invoice: 'FIN-2', debtor: 'acme' })]], funded);
   assert.deepEqual(two.results.map((r) => r.reason), [null, 'concentration_breached']);
@@ -101,7 +101,24 @@ test('a request is told only about itself', () => {
 });
 
 test('a full book says so instead of growing', () => {
-  const book = { ...newBook(D0), events: Array.from({ length: MAX_EVENTS }, () => ({ t: 0, op: 'deposit', args: { lender: 'lea', amount: 1 } })) };
-  const r = act(book, D0, 'deposit', { amount: 1 }, 'lea');
+  const book = { ...newBook(D0), events: Array.from({ length: MAX_EVENTS }, () => ({ t: 0, op: 'deposit', args: { lender: 'members', amount: 1 } })) };
+  const r = act(book, D0, 'deposit', { amount: 1 });
   assert.deepEqual([r.result.ok, r.book.events.length], [false, MAX_EVENTS]);
+});
+
+test('the journal stores no account id and no name, and an older journal is cleaned without changing the pool', () => {
+  const { book } = run([[0, 'deposit', { amount: 20_000 }], [1, 'advance', ask()], [20, 'repay', { invoice: 'FIN-1' }], [21, 'withdraw', {}]]);
+  assert.deepEqual([...new Set(book.events.flatMap((e) => [e.args.lender, e.args.supplier, e.args.payer]).filter(Boolean))].sort(), ['members', 'payer', 'requester']);
+  assert.equal(view(book, D0 + 21).capital, 0);
+
+  const old = { v: 1, start_day: D0, events: [
+    { t: 0, op: 'deposit', args: { lender: '712020:abc', amount: 20_000 } },
+    { t: 1, op: 'advance', args: { invoice: 'FIN-1', supplier: 'Jane Doe', debtor: 'acme', face: 5_000, advance: 4_500, fee: 50, due: 31, analysis: true } },
+    { t: 20, op: 'repay', args: { invoice: 'FIN-1', amount: 4_550, payer: '712020:abc' } },
+  ] };
+  const clean = withoutPeople(old);
+  assert.doesNotMatch(JSON.stringify(clean), /712020|Jane/);
+  assert.equal(withoutPeople(clean), clean);
+  const strip = (v) => ({ ...v, log: v.log.map((l) => l.accepted) });
+  assert.deepEqual(strip(view(clean, D0 + 20)), strip(view(old, D0 + 20)));
 });

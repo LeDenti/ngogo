@@ -5,7 +5,7 @@ import { DEFAULT_PARAMS, dayOfInstant } from './encirclement.js';
 import { personIndex } from './views.js';
 import {
   MEMBRANE_PARAMS, membraneDecision, pickAlly, incubationRecord, incubationComment,
-  sweepDecision, releasedRecord, releaseComment,
+  sweepDecision, releasedRecord, releaseComment, withoutPeople,
 } from './membrane.js';
 
 const BIRTH_MS = 120_000; // an assignment this soon after creation is part of the creation
@@ -50,12 +50,12 @@ export async function onRequest(store, notes, issueKey, nowMs = Date.now(), opts
   const others = await within(colleagues(store, issue, today, params, membrane.ally_candidates).catch(() => []), allyBudgetMs, []);
   const ally = pickAlly(issue.assignee, others);
   // Deciding took a few seconds: look again before writing, so two events can never both speak.
-  const now = await notes.read(issueKey);
-  if (now && now.person && now.person.id === issue.assignee.id) return { action: 'pass', reason: 'already_decided' };
-  const record = incubationRecord(issue, index, ally, nowMs, membrane, params);
+  if (await notes.read(issueKey)) return { action: 'pass', reason: 'already_decided' };
+  const record = incubationRecord(index, ally, nowMs, membrane, params);
   await notes.write(issueKey, record);
-  await notes.comment(issueKey, incubationComment(record));
-  return { action: 'incubate', record };
+  // The names go into the comment, an ordinary Jira comment. They are not stored by Ngogo.
+  await notes.comment(issueKey, incubationComment(record, { person: issue.assignee.name, ally: ally?.name }));
+  return { action: 'incubate', record, ally: ally?.name ?? null };
 }
 
 /** Called every hour: releases what should no longer be held. */
@@ -65,10 +65,12 @@ export async function sweep(store, notes, nowMs = Date.now(), opts = {}) {
   const done = [];
   const cache = new Map(); // one index per person per sweep
   for (const key of await notes.listIncubating(opts.limit ?? 25)) {
-    const [issue, record] = await Promise.all([store.getIssue(key), notes.read(key)]);
-    if (!issue || !record) continue;
+    const [issue, stored] = await Promise.all([store.getIssue(key), notes.read(key)]);
+    if (!issue || !stored) continue;
+    const record = withoutPeople(stored);
+    if (record !== stored) await notes.write(key, record); // a record from an earlier version: drop what it said about people
     let d = sweepDecision(record, issue, null, nowMs);
-    if (d.action === 'keep' && record.state === 'incubating') {
+    if (d.action === 'keep' && record.state === 'incubating' && issue.assignee) {
       if (!cache.has(issue.assignee.id)) cache.set(issue.assignee.id, await personIndex(store, issue.assignee, today, params));
       d = sweepDecision(record, issue, cache.get(issue.assignee.id), nowMs);
     }

@@ -47,7 +47,7 @@ export const PoolOfProject = () => {
       <Inline space="space.100" alignBlock="end">
         <Stack><Label labelFor="ngogo-fund">Put into the pool</Label><Textfield id="ngogo-fund" defaultValue="20000" onChange={(e) => setAmount(e.target.value)} /></Stack>
         <Button appearance="primary" onClick={fund} isDisabled={busy}>Fund the pool</Button>
-        <Button appearance="subtle" onClick={() => send('withdraw', {})} isDisabled={busy}>Take my share out</Button>
+        <Button appearance="subtle" onClick={() => send('withdraw', {})} isDisabled={busy}>Take everything out</Button>
       </Inline>
 
       <AdvancesTable advances={pool.advances} />

@@ -57,11 +57,11 @@ export const Answer = ({ invoice }) => {
 export const AdvancesTable = ({ advances }) => (
   <DynamicTable
     caption="Advances"
-    head={{ cells: ['Invoice', 'Supplier', 'Debtor', 'Invoice amount', 'Advance', 'Still owed', 'Status', 'Due'].map((c) => ({ key: c, content: c })) }}
+    head={{ cells: ['Invoice', 'Debtor', 'Invoice amount', 'Advance', 'Still owed', 'Status', 'Due'].map((c) => ({ key: c, content: c })) }}
     rows={advances.map((a) => ({
       key: a.invoice,
       cells: [
-        { key: 'i', content: a.invoice }, { key: 's', content: a.supplier }, { key: 'd', content: a.debtor }, { key: 'f', content: String(a.face) },
+        { key: 'i', content: a.invoice }, { key: 'd', content: a.debtor }, { key: 'f', content: String(a.face) },
         { key: 'a', content: String(a.advance) }, { key: 'o', content: String(a.still_owed) }, { key: 'st', content: <StatusLozenge status={a.status} /> },
         { key: 'due', content: a.status !== 'funded' ? 'closed' : a.due_in_days >= 0 ? `in ${a.due_in_days} d` : `overdue ${-a.due_in_days} d` },
       ],

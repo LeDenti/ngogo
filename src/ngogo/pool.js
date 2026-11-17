@@ -7,6 +7,9 @@
 // This file is the book around the engine. The book is a journal of events; the state is never stored,
 // it is replayed from the journal, so the same journal always gives the same pool. Pure, no I/O.
 // A book, not a bank: play numbers, no custody, no money moves.
+//
+// Privacy by construction: the journal holds amounts, dates, request keys and the debtor typed by the user.
+// No account id and no person's name is stored: the pool has one collective lender, "members".
 import { InvoicePool } from '../engine/invoices.js';
 import { formatRatio } from './encirclement.js';
 
@@ -14,7 +17,20 @@ export const MAX_EVENTS = 1_000;
 const MAX_AMOUNT = 1_000_000_000;
 
 /** A fresh book, opened today. */
-export const newBook = (today) => ({ v: 1, start_day: today, events: [] });
+export const newBook = (today) => ({ v: 2, start_day: today, events: [] });
+
+const MEMBERS = 'members';
+/** Removes account ids and names from a journal written by an earlier version. Returns the same object if clean. */
+export function withoutPeople(book) {
+  if (book.v >= 2) return book;
+  const clean = (a) => ({
+    ...a,
+    ...('lender' in a ? { lender: MEMBERS } : {}),
+    ...('supplier' in a ? { supplier: 'requester' } : {}),
+    ...('payer' in a ? { payer: 'payer' } : {}),
+  });
+  return { ...book, v: 2, events: book.events.map((e) => ({ ...e, args: clean(e.args) })) };
+}
 
 export const WHY = {
   zero_amount: 'an amount is zero or negative',
@@ -29,7 +45,7 @@ export const WHY = {
   concentration_breached: 'this debtor would owe a larger share of the pool than it accepts in its current mood',
   debtor_cap_breached: 'this debtor would owe more than the absolute ceiling',
   pool_illiquid: 'the pool does not have that much free cash',
-  not_a_lender: 'this person has nothing in the pool',
+  not_a_lender: 'there is nothing in the pool to take out',
   unknown_invoice: 'the pool never advanced on this invoice',
   not_funded: 'this advance is already closed',
   default_too_early: 'the grace period after the due date is not over',
@@ -47,13 +63,13 @@ function replay(book) {
 }
 
 /** Turns what a screen sent into exact engine arguments, or says what is wrong. Nothing reaches the engine unchecked. */
-function prepare(pool, op, input, t, who) {
+function prepare(pool, op, input, t) {
   const bad = (error) => ({ error });
   if (op === 'deposit') {
     if (!whole(input.amount) || input.amount === 0) return bad('Give a whole amount above zero.');
-    return { args: { lender: who, amount: input.amount } };
+    return { args: { lender: MEMBERS, amount: input.amount } };
   }
-  if (op === 'withdraw') return { args: { lender: who } };
+  if (op === 'withdraw') return { args: { lender: MEMBERS } };
   if (op === 'advance') {
     for (const k of ['face', 'advance', 'fee', 'days']) if (!whole(input[k])) return bad(`${k} must be a whole number.`);
     const debtor = label(input.debtor).toLowerCase();
@@ -61,7 +77,7 @@ function prepare(pool, op, input, t, who) {
     if (!label(input.invoice)) return bad('No invoice.');
     return {
       args: {
-        invoice: label(input.invoice), supplier: label(input.supplier) || 'supplier', debtor,
+        invoice: label(input.invoice), supplier: 'requester', debtor,
         face: input.face, advance: input.advance, fee: input.fee, due: t + input.days, analysis: input.analysis === true,
       },
     };
@@ -72,10 +88,10 @@ function prepare(pool, op, input, t, who) {
     const owed = rec ? rec.advance + rec.fee - rec.repaid : 0;
     const amount = input.amount === undefined || input.amount === null ? owed : input.amount;
     if (!whole(amount)) return bad('amount must be a whole number.');
-    return { args: { invoice: label(input.invoice), amount, payer: who } };
+    return { args: { invoice: label(input.invoice), amount, payer: 'payer' } };
   }
   if (op === 'default') return { args: { invoice: label(input.invoice) } };
-  if (op === 'buyback') return { args: { invoice: label(input.invoice), payer: who } };
+  if (op === 'buyback') return { args: { invoice: label(input.invoice), payer: 'payer' } };
   return bad('Unknown operation.');
 }
 
@@ -84,11 +100,11 @@ function prepare(pool, op, input, t, who) {
  * Returns {book, result}: `book` is the new book (unchanged if the input was invalid), `result` says what happened.
  * Refusals by the engine ARE journalled: a refusal moves the mood, and the journal is the whole truth.
  */
-export function act(book, today, op, input, who) {
+export function act(book, today, op, input) {
   const t = Math.max(today - book.start_day, book.events.at(-1)?.t ?? 0); // the book's clock never goes back
   if (book.events.length >= MAX_EVENTS) return { book, result: { ok: false, error: 'This book is full. Start a new pool.' } };
   const pool = replay(book);
-  const prepared = prepare(pool, op, input ?? {}, t, label(who) || 'someone');
+  const prepared = prepare(pool, op, input ?? {}, t);
   if (prepared.error) return { book, result: { ok: false, error: prepared.error } };
 
   const d = pool.apply(op, t, prepared.args);
@@ -109,7 +125,7 @@ export function act(book, today, op, input, who) {
 const SAID = {
   deposit: (e) => `${e.amount} put into the pool`,
   withdraw: (e) => (e.decision === 'ok' ? `${e.paid} taken out of the pool` : 'A withdrawal was asked'),
-  advance: (e) => `${e.supplier} asks ${e.advance} on invoice ${e.invoice} of ${e.face} owed by ${e.debtor}, due in ${e.due - e.t} days`,
+  advance: (e) => `An advance of ${e.advance} is asked on invoice ${e.invoice} of ${e.face} owed by ${e.debtor}, due in ${e.due - e.t} days`,
   repay: (e) => `${e.amount} repaid on ${e.invoice}`,
   default: (e) => `${e.invoice} is written off as unpaid`,
   buyback: (e) => `${e.invoice} is bought back after its write-off`,
@@ -135,7 +151,6 @@ export function view(book, today) {
     outstanding: s.outstanding,
     losses: s.losses,
     fees_earned: s.fees_earned,
-    lenders: Object.keys(s.lenders).length,
     mood: s.mood,
     stress: `${formatRatio(s.stress_bps)} %`,
     ceilings: {
@@ -148,7 +163,7 @@ export function view(book, today) {
     },
     exposures: Object.entries(s.exposures).map(([debtor, owed]) => ({ debtor, owed })).sort((a, b) => b.owed - a.owed),
     advances: Object.entries(pool.advances).map(([invoice, r]) => ({
-      invoice, supplier: r.supplier, debtor: r.debtor, face: r.face, advance: r.advance, fee: r.fee,
+      invoice, debtor: r.debtor, face: r.face, advance: r.advance, fee: r.fee,
       repaid: r.repaid, still_owed: r.status === 'funded' ? r.advance + r.fee - r.repaid : 0,
       status: r.status, due_in_days: r.due - t, can_be_written_off_in_days: Math.max(0, r.due + pool.policy.grace - t),
     })),

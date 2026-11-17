@@ -33,7 +33,9 @@ test('a request: who it lands on, where it comes from, and the hold notice', asy
   assert.match(r.summary, /^Nadia is cornered at 8\.70 to 1: 10 independent sources, 0 allies, 18 open requests\. Ngogo holds TEAM-61 in incubation until 2026-11-19/);
   assert.equal(r.this_request_comes_from, 'Ines');
   assert.equal(r.held.state, 'incubating');
-  assert.match(r.held.notice[2], /Omar has the lightest load/);
+  // The tool holds no name of its own: the ally is named in the notice on the request, not in what Ngogo stores.
+  assert.match(r.held.notice[1], /^Nadia is already pressed by 10 independent sources/);
+  assert.match(r.held.notice[2], /proposed an ally in its notice/);
   const calm = await requestEncirclement(store, notes, { issueKey: 'TEAM-18' }, NOW);
   assert.equal(calm.held, null);
   assert.equal(calm.assignee.name, 'Omar');
@@ -41,19 +43,19 @@ test('a request: who it lands on, where it comes from, and the hold notice', asy
 });
 
 test('held requests, then a release by hand', async () => {
-  const { notes } = await world();
-  const before = await heldRequests(notes, {});
+  const { store, notes } = await world();
+  const before = await heldRequests(store, notes, {});
   assert.equal(before.summary, 'Ngogo holds 1 request in incubation.');
-  assert.deepEqual(before.held[0], { request: 'TEAM-61', assignee: 'Nadia', held_since: before.held[0].held_since, held_until: before.held[0].held_until, ratio_when_held: '8.70 : 1', suggested_ally: 'Omar' });
-  assert.equal((await heldRequests(notes, { projectKey: 'OTHER' })).held.length, 0);
+  assert.deepEqual(before.held[0], { request: 'TEAM-61', assignee: 'Nadia', held_since: before.held[0].held_since, held_until: before.held[0].held_until, ratio_when_held: '8.70 : 1', ally_proposed_in_the_notice: true });
+  assert.equal((await heldRequests(store, notes, { projectKey: 'OTHER' })).held.length, 0);
 
-  const r = await releaseRequest(notes, { issueKey: 'TEAM-61' }, 'acct-1', NOW);
-  assert.deepEqual([r.released, r.summary], [true, 'TEAM-61 is released from incubation. Nadia was at 8.70 to 1 when it was held.']);
-  assert.equal(notes.records.get('TEAM-61').released_by, 'acct-1');
+  const r = await releaseRequest(notes, { issueKey: 'TEAM-61' }, NOW);
+  assert.deepEqual([r.released, r.summary], [true, 'TEAM-61 is released from incubation. Its assignee was at 8.70 to 1 when it was held.']);
+  assert.doesNotMatch(JSON.stringify(notes.records.get('TEAM-61')), /Nadia|Omar|demo-|acct/);
   assert.equal(notes.comments.length, 1);
-  assert.equal((await releaseRequest(notes, { issueKey: 'TEAM-61' }, 'acct-1', NOW)).released, false);
-  assert.equal((await releaseRequest(notes, { issueKey: 'TEAM-1' }, 'acct-1', NOW)).summary, 'Ngogo never held TEAM-1.');
-  assert.equal((await heldRequests(notes, {})).summary, 'Ngogo holds nothing in incubation.');
+  assert.equal((await releaseRequest(notes, { issueKey: 'TEAM-61' }, NOW)).released, false);
+  assert.equal((await releaseRequest(notes, { issueKey: 'TEAM-1' }, NOW)).summary, 'Ngogo never held TEAM-1.');
+  assert.equal((await heldRequests(store, notes, {})).summary, 'Ngogo holds nothing in incubation.');
 });
 
 test('nothing but real keys reaches Jira', async () => {
@@ -61,9 +63,9 @@ test('nothing but real keys reaches Jira', async () => {
   for (const bad of ['TEAM" OR project = "HR', 'team', '', undefined, 'TEAM-1']) assert.equal((await whoIsCornered(store, { projectKey: bad }, NOW)).ok, false);
   for (const bad of ['TEAM-1 OR 1=1', 'TEAM', '../x', undefined]) {
     assert.equal((await requestEncirclement(store, notes, { issueKey: bad }, NOW)).ok, false);
-    assert.equal((await releaseRequest(notes, { issueKey: bad }, 'a', NOW)).ok, false);
+    assert.equal((await releaseRequest(notes, { issueKey: bad }, NOW)).ok, false);
   }
-  assert.equal((await heldRequests(notes, { projectKey: 'x y' })).ok, false);
+  assert.equal((await heldRequests(store, notes, { projectKey: 'x y' })).ok, false);
 });
 
 test('advance what-if: the same invoice, a calm pool and a wary one', () => {

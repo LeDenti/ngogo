@@ -11,7 +11,7 @@ import { InvoicePool } from '../engine/invoices.js';
 import sample from '../cases-sample.json';
 import { kvs } from '@forge/kvs';
 import api, { route } from '@forge/api';
-import { newBook, act, view, invoiceView } from '../ngogo/pool.js';
+import { newBook, act, view, invoiceView, withoutPeople } from '../ngogo/pool.js';
 import { dayOfInstant } from '../ngogo/encirclement.js';
 
 const resolver = new Resolver();
@@ -40,14 +40,20 @@ resolver.define('selfTest', () => {
 // never from what the screen sends: nobody can act on the pool of a project they cannot open.
 const bookKey = (projectId) => `pool-${projectId}`;
 const today = () => dayOfInstant(Date.now());
-const loadBook = async (projectId) => (await kvs.get(bookKey(projectId))) ?? newBook(today());
+// Nothing about a person is stored: no account id, no name. A journal from an earlier version is cleaned on first read.
+async function loadBook(projectId) {
+  const stored = await kvs.get(bookKey(projectId));
+  if (!stored) return newBook(today());
+  const clean = withoutPeople(stored);
+  if (clean !== stored) await kvs.set(bookKey(projectId), clean);
+  return clean;
+}
 
-// Who raised a request, and in which project it lives. Read as the app: the caller is already looking at it.
-async function requestFacts(issueKey) {
-  const res = await api.asApp().requestJira(route`/rest/api/3/issue/${issueKey}?fields=reporter,project`, { headers: { Accept: 'application/json' } });
+// In which project a request lives. Read as the app: the caller is already looking at that request.
+async function projectOf(issueKey) {
+  const res = await api.asApp().requestJira(route`/rest/api/3/issue/${issueKey}?fields=project`, { headers: { Accept: 'application/json' } });
   if (!res.ok) throw new Error(`could not read the request (${res.status})`);
-  const f = (await res.json()).fields;
-  return { projectId: f.project.id, supplier: f.reporter?.displayName ?? 'supplier' };
+  return (await res.json()).fields.project.id;
 }
 
 resolver.define('poolView', async ({ context }) => {
@@ -77,12 +83,9 @@ resolver.define('poolAct', async ({ payload, context }) => {
   if (REQUEST_OPS.has(op) && !issueKey) return { ok: false, error: 'This is done from a request.' };
 
   const input = { ...(payload?.input ?? {}) };
-  if (REQUEST_OPS.has(op)) {
-    input.invoice = issueKey; // the invoice IS the request being viewed
-    if (op === 'advance') input.supplier = (await requestFacts(issueKey)).supplier;
-  }
+  if (REQUEST_OPS.has(op)) input.invoice = issueKey; // the invoice IS the request being viewed
   const book = await loadBook(projectId);
-  const { book: next, result } = act(book, today(), op, input, context.accountId);
+  const { book: next, result } = act(book, today(), op, input);
   // Last write wins: two people acting in the same second on the same pool could lose one event.
   if (next !== book) await kvs.set(bookKey(projectId), next);
   const v = view(next, today());
@@ -97,7 +100,7 @@ resolver.define('poolAct', async ({ payload, context }) => {
 resolver.define('poolRequest', async ({ context }) => {
   const issueKey = context.extension.request?.key;
   if (!issueKey) return { ok: false, error: 'No request here.' };
-  const { projectId } = await requestFacts(issueKey);
+  const projectId = await projectOf(issueKey);
   return { ok: true, invoice: invoiceView(await loadBook(projectId), today(), issueKey) };
 });
 

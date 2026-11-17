@@ -27,7 +27,7 @@ const Balance = () => {
   const release = async () => {
     setReleasing(true);
     try {
-      const released = releasedRecord(held, 'released_by_hand', Date.now(), context?.accountId ?? null);
+      const released = releasedRecord(held, 'released_by_hand', Date.now());
       await notes.write(issueKey, released);
       await notes.comment(issueKey, releaseComment(released));
       setHeld(released);
@@ -41,7 +41,7 @@ const Balance = () => {
   const Membrane = () => {
     if (!held) return null;
     if (held.state === 'incubating') {
-      const lines = incubationLines(held);
+      const lines = incubationLines(held, { person: data?.person?.name });
       return (
         <SectionMessage appearance="warning" title="Held in incubation">
           {lines.slice(0, 3).map((l) => <Text key={l}>{l}</Text>)}
